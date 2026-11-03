@@ -3,6 +3,8 @@
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp>
 
+#include <chrono>
+
 int main() {
     // OpenGL settings we request for:
     sf::ContextSettings settings;
@@ -34,18 +36,49 @@ int main() {
     // load vertex and fragment shaders:
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
     // TODO: eventually add another Shader here which uses the blur fragment shader,
+    //3
+    sf::Shader blurShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"blur.frag"});
+    sf::RenderTexture preBlur(window.getSize());
+
     // also create a sf::RenderTexture...
+    auto startTime = std::chrono::steady_clock::now();
+
     while (window.isOpen()) {
         while (auto e = window.pollEvent()) {
             if (e->is<sf::Event::Closed>()) {
                 return 0;
             }
         }
+        
+        
         // TODO: set shader uniforms and eventually draw into
+        //1a
+        shader.setUniform("windowSize", sf::Vector2f(window.getSize()));
+
+        //1b
+        sf::Vector2i mousePixel = sf::Mouse::getPosition(window);
+        float mouseX = static_cast<float>(mousePixel.x);
+        float mouseY = static_cast<float>(window.getSize().y) - static_cast<float>(mousePixel.y);
+        shader.setUniform("mousePos", sf::Vector2f(mouseX, mouseY));
+
+        //2
+        auto now = std::chrono::steady_clock::now();
+        float timeMs = std::chrono::duration<float, std::milli>(now - startTime).count();
+        shader.setUniform("time", timeMs);
+
+
         // a RenderTexture first before postprocessing into the window target.
-        window.clear(sf::Color::Black);
-        window.draw(fullscreenTriangle, &shader);
-        window.display();
+        /// Pass 1: draw the gradient and circle into the offscreen texture
+preBlur.clear(sf::Color::Black);
+preBlur.draw(fullscreenTriangle, &shader);
+preBlur.display();
+
+// Pass 2: draw that texture through the blur into the window
+blurShader.setUniform("texture", preBlur.getTexture());
+blurShader.setUniform("windowSize", sf::Vector2f(window.getSize()));
+window.clear(sf::Color::Black);
+window.draw(fullscreenTriangle, &blurShader);
+window.display();
     }
     return 0;
 }
